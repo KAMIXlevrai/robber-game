@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Robber game</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      text-align: center;
+    }
+
+    canvas {
+      display: block;
+      margin: 15px;
+    }
+
+    #menu {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      background-color: rgb(145, 145, 145);
+    }
+
+    #menu button {
+      font-size: 30px;
+      padding: 10px 20px;
+      color: black;
+      background-color: darkorange;
+      border-radius: 5px;
+    }
+
+    #gameovermenu {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+
+    p {
+      font-size: 24px;
+      color: darkorange;
+      font-family: arial;
+    }
+
+    #menu div button {
+      font-size: 17px;
+      text-align: right;
+      color: rgb(0, 20, 196);
+      background-color: rgb(0, 195, 255);
+      border-radius: 5px;
+    }
+
+  </style>
+</head>
+<body>
+  <p id="timer"><strong>Time: 02:00</strong></p>
+
+  <audio id="decals" src="assets/song/decals.ogg" loop></audio>
+  <audio id="sowhat" src="assets/song/sowhat.ogg" loop></audio>
+  <audio id="ridin" src="assets/song/ridin.ogg" loop></audio>
+
+  
+  <div id="menu">
+    <button onclick="startGame()">Launch the game</button>
+    <div id="music-buttons">
+      <button onclick="stopMusic1()">stop</button>
+      <button onclick="changeMusic1()">decals</button>
+      <input type="range" id="volume-slider" min="0" max="1" step="0.1" value="1" onchange="adjustVolume1(this.value)">
+      <br>
+
+      <button onclick="stopMusic2()">stop</button>
+      <button onclick="changeMusic2()">so what!</button>
+      <input type="range" id="volume-slider" min="0" max="1" step="0.1" value="1" onchange="adjustVolume2(this.value)">
+      <br>
+
+      <button onclick="stopMusic3()">stop</button>
+      <button onclick="changeMusic3()">ridin</button>
+      <input type="range" id="volume-slider" min="0" max="1" step="0.1" value="1" onchange="adjustVolume3(this.value)">
+    </div>
+  </div>
+
+  <div id="gameovermenu" style="display: none;">
+    <button onclick="startGame()">restarting ...</button>
+  </div>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const context = canvas.getContext("2d");
+    const screenWidth = window.innerWidth;
+    const screenHeight = window.innerHeight;
+    const timerDuration = 120000; //120 secondes
+
+    canvas.width = screenWidth;
+    canvas.height = screenHeight;
+
+    const gridSize = 50; // Taille d'une case de la grille
+
+    const gridWidth = Math.floor(screenWidth / gridSize); // Largeur de la grille (nombre de colonnes)
+    const gridHeight = Math.floor(screenHeight / gridSize); // Hauteur de la grille (nombre de lignes)
+
+    const startTime = Date.now();
+
+    const player = {
+      x: Math.floor(gridWidth / 2),
+      y: Math.floor(gridHeight / 2),
+      color: "blue",
+      score: 0,
+      alive: true,
+    };
+
+    const enemies = [];
+    const enemyCount = Math.floor(Math.random() * 4) + 2; // Nombre d'ennemis entre 2 et 5
+
+    for (let i = 0; i < enemyCount; i++) {
+      enemies.push({
+        x: Math.floor(Math.random() * gridWidth),
+        y: Math.floor(Math.random() * gridHeight),
+        color: "red",
+      });
+    }
+
+    let purpleCubes = [];
+    const purpleCubeCount = Math.floor(Math.random() * 6) + 2; // Nombre de cubes violets entre 2 et 7
+
+    function generateMap() {
+      const map = [];
+
+      for (let y = 0; y < gridHeight; y++) {
+        const row = [];
+
+        for (let x = 0; x < gridWidth; x++) {
+          if (Math.random() < 0.2) {
+            row.push(1); // Obstacle
+          } else if (Math.random() < 0.1) {
+            row.push(3); // Cube gris
+          } else {
+            row.push(0); // Case vide
+          }
+        }
+
+        map.push(row);
+      }
+
+      return map;
+    }
+
+    function generatePurpleCubes() {
+      purpleCubes = [];
+
+      for (let i = 0; i < purpleCubeCount; i++) {
+        let x, y;
+
+        do {
+          x = Math.floor(Math.random() * gridWidth);
+          y = Math.floor(Math.random() * gridHeight);
+        } while (map[y][x] !== 0 || isOccupied(x, y));
+
+        purpleCubes.push({
+          x: x,
+          y: y,
+          color: "purple",
+        });
+
+        map[y][x] = 2; // Case contenant un cube violet
+      }
+    }
+
+    let map = generateMap();
+    generatePurpleCubes();
+
+    function isOccupied(x, y) {
+      if (player.x === x && player.y === y) {
+        return true;
+      }
+
+      for (let i = 0; i < enemies.length; i++) {
+        const enemy = enemies[i];
+        if (enemy.x === x && enemy.y === y) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    function handlePlayerMovement(event) {
+      if (!player.alive) {
+        return;
+      }
+
+      const key = event.key;
+
+      if (key === "ArrowUp" && player.y > 0) {
+        player.y--;
+      } else if (key === "ArrowDown" && player.y < gridHeight - 1) {
+        player.y++;
+      } else if (key === "ArrowLeft" && player.x > 0) {
+        player.x--;
+      } else if (key === "ArrowRight" && player.x < gridWidth - 1) {
+        player.x++;
+      }
+
+      checkCollisions();
+    }
+
+    function moveEnemies() {
+      if (!player.alive) {
+        return;
+      }
+
+      for (let i = 0; i < enemies.length; i++) {
+        const enemy = enemies[i];
+
+        if (Math.random() < 0.33) {
+          let dx = Math.random() < 0.5 ? -1 : 1;
+          let dy = Math.random() < 0.5 ? -1 : 1;
+
+          const nextX = enemy.x + dx; // Déplacement horizontal
+          const nextY = enemy.y + dy; // Déplacement vertical
+
+          if (
+            nextX >= 0 &&
+            nextX < gridWidth &&
+            nextY >= 0 &&
+            nextY < gridHeight &&
+            map[nextY][nextX] !== 1 &&
+            !isOccupied(nextX, nextY)
+          ) {
+            enemy.x = nextX;
+            enemy.y = nextY;
+          }
+        }
+      }
+
+      checkCollisions();
+    }
+
+    function drawGrid() {
+      context.clearRect(0, 0, screenWidth, screenHeight);
+
+      // Dessiner les cases vides
+      for (let y = 0; y < gridHeight; y++) {
+        for (let x = 0; x < gridWidth; x++) {
+          const tileX = x * gridSize;
+          const tileY = y * gridSize;
+
+          context.fillStyle = "#ccc";
+          context.fillRect(tileX, tileY, gridSize, gridSize);
+        }
+      }
+
+      // Dessiner les obstacles
+      for (let y = 0; y < gridHeight; y++) {
+        for (let x = 0; x < gridWidth; x++) {
+          if (map[y][x] === 1) {
+            const obstacleX = x * gridSize;
+            const obstacleY = y * gridSize;
+
+            context.fillStyle = "#666";
+            context.fillRect(obstacleX, obstacleY, gridSize, gridSize);
+          }
+        }
+      }
+
+      // Dessiner les ennemis
+      for (let i = 0; i < enemies.length; i++) {
+        const enemy = enemies[i];
+        const enemyX = enemy.x * gridSize;
+        const enemyY = enemy.y * gridSize;
+
+        context.fillStyle = enemy.color;
+        context.fillRect(enemyX, enemyY, gridSize, gridSize);
+      }
+
+      // Dessiner les cubes violets
+      for (let i = 0; i < purpleCubes.length; i++) {
+        const purpleCube = purpleCubes[i];
+        const purpleCubeX = purpleCube.x * gridSize;
+        const purpleCubeY = purpleCube.y * gridSize;
+
+        context.fillStyle = purpleCube.color;
+        context.fillRect(purpleCubeX, purpleCubeY, gridSize, gridSize);
+      }
+
+      // Dessiner le joueur
+      const playerX = player.x * gridSize;
+      const playerY = player.y * gridSize;
+
+      context.fillStyle = player.color;
+      context.fillRect(playerX, playerY, gridSize, gridSize);
+
+      // Dessiner le score du joueur
+      context.fillStyle = "darkviolet";
+      context.font = "30px Arial";
+      context.fillText("Score: " + player.score, 10, 30);
+    }
+
+    function checkCollisions() {
+  if (!player.alive) {
+    endGame(); // Appeler endGame() lorsque le joueur est éliminé
+    return;
+  }
+
+  // Vérifier les collisions avec les ennemis
+  for (let i = 0; i < enemies.length; i++) {
+    const enemy = enemies[i];
+
+    if (enemy.x === player.x && enemy.y === player.y) {
+      player.alive = false;
+      break;
+    }
+  }
+
+  // Vérifier les collisions avec les cubes violets
+  for (let i = 0; i < purpleCubes.length; i++) {
+    const purpleCube = purpleCubes[i];
+
+    if (purpleCube.x === player.x && purpleCube.y === player.y) {
+      player.score += 10;
+      purpleCubes.splice(i, 1);
+      map[purpleCube.y][purpleCube.x] = 0;
+
+      // Générer un nouveau cube violet à un emplacement aléatoire
+      let newX, newY;
+
+      do {
+        newX = Math.floor(Math.random() * gridWidth);
+        newY = Math.floor(Math.random() * gridHeight);
+      } while (map[newY][newX] !== 0 || isOccupied(newX, newY));
+
+      purpleCubes.push({
+        x: newX,
+        y: newY,
+        color: "purple",
+      });
+
+      map[newY][newX] = 2; // Mettre à jour la carte avec le nouveau cube violet
+      break;
+    }
+  }
+
+  // Vérifier les collisions avec les cubes gris
+  if (map[player.y][player.x] === 1) {
+    player.alive = false;
+  }
+}
+
+
+function gameLoop() {
+  if (player.alive) {
+    moveEnemies();
+    drawGrid();
+    requestAnimationFrame(gameLoop);
+  } else {
+        // Le joueur est éliminé, afficher un message de fin de partie
+        context.fillStyle = "black";
+        context.font = "48px Arial";
+        context.fillText("Game Over", screenWidth / 2 - 100, screenHeight / 2);
+        setTimeout(function() {
+          document.getElementById("gameovermenu").style.display = "block";
+        // Réinitialiser les variables du jeu
+         player.x = Math.floor(gridWidth / 2);
+         player.y = Math.floor(gridHeight / 2);
+         player.score = 0;
+         player.alive = true;
+         enemies.length = 0;
+         generateMap();
+         generatePurpleCubes();
+
+        // Générer de nouveaux ennemis
+       for (let i = 0; i < enemyCount; i++) {
+         enemies.push({
+         x: Math.floor(Math.random() * gridWidth),
+         y: Math.floor(Math.random() * gridHeight),
+         color: "red",
+                              });
+           }
+
+       // Cacher le menu
+         document.getElementById("gameovermenu").style.display = "none";
+
+       // Lancer la boucle de jeu
+         gameLoop();
+                 }, 2000);
+                 
+      }
+      updateTimer(); // Appeler la fonction de mise à jour du minuteur à chaque itération
+}
+
+function updateTimer() {
+  const timerElement = document.getElementById("timer");
+  const remainingTime = Math.max((2 * 60 * 1000 - (Date.now() - startTime)) / 1000, 0);
+  const minutes = Math.floor(remainingTime / 60);
+  const seconds = Math.floor(remainingTime % 60);
+
+  timerElement.textContent = `Time: ${padNumber(minutes)}:${padNumber(seconds)}`;
+}
+
+function padNumber(num) {
+  return num.toString().padStart(2, "0");
+}
+
+function endGame() {
+  clearTimeout(timerId); // Arrêter le minuteur
+
+  // Le joueur est éliminé, afficher un message de fin de partie
+  context.fillStyle = "black";
+  context.font = "48px Arial";
+  context.fillText("Game Over", screenWidth / 2 - 100, screenHeight / 2);
+
+  // Réinitialiser le temps de départ à 2 minutes
+  startTime = Date.now() - (2 * 60 * 1000);
+
+  // Le joueur est éliminé, afficher un message de fin de partie
+  context.fillStyle = "black";
+  context.font = "48px Arial";
+  context.fillText("Game Over", screenWidth / 2 - 100, screenHeight / 2);
+
+}
+
+function changeMusic1() {
+  document.getElementById("decals").play();
+}
+
+function changeMusic2() {
+  document.getElementById("sowhat").play();
+}
+
+function changeMusic3() {
+  document.getElementById("ridin").play();
+}
+
+function stopMusic1() {
+  const audioElement = document.getElementById("decals");
+  audioElement.pause();
+}
+
+function stopMusic2() {
+  const audioElement = document.getElementById("sowhat");
+  audioElement.pause();
+}
+
+function stopMusic3() {
+  const audioElement = document.getElementById("ridin");
+  audioElement.pause();
+}
+
+function toggleVolume1() {
+  const audioElement = document.getElementById("decals");
+  audioElement.muted = !audioElement.muted;
+
+  const volumeSlider = document.getElementById("volume-slider");
+  volumeSlider.disabled = audioElement.muted;
+}
+
+function adjustVolume1(value) {
+  const audioElement = document.getElementById("decals");
+  audioElement.volume = value;
+}
+
+function toggleVolume2() {
+  const audioElement = document.getElementById("decals");
+  audioElement.muted = !audioElement.muted;
+
+  const volumeSlider = document.getElementById("volume-slider");
+  volumeSlider.disabled = audioElement.muted;
+}
+
+function adjustVolume2(value) {
+  const audioElement = document.getElementById("decals");
+  audioElement.volume = value;
+}
+
+function toggleVolume3() {
+  const audioElement = document.getElementById("decals");
+  audioElement.muted = !audioElement.muted;
+
+  const volumeSlider = document.getElementById("volume-slider");
+  volumeSlider.disabled = audioElement.muted;
+}
+
+function adjustVolume3(value) {
+  const audioElement = document.getElementById("decals");
+  audioElement.volume = value;
+}
+
+function startGame() {
+
+  let timerId;
+
+  // Cacher le menu
+  document.getElementById("menu").style.display = "none";
+
+  // Démarrer le minuteur de 2 minutes
+  timerId = setTimeout(endGame, 2 * 60 * 1000); // 2 minutes en millisecondes
+
+  // Activer les écouteurs d'événements
+  document.addEventListener("keydown", handlePlayerMovement);
+
+  // Lancer la boucle de jeu
+  gameLoop();
+
+  // Lancer la musique de fond
+  audioElement.play();
+}
+
+//document.getElementById("decals").play();
+  </script>
+</body>
+</html>
